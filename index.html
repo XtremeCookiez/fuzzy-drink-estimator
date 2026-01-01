@@ -46,7 +46,7 @@
         <h3>Current BAC: <span id="bac-label">N/A</span></h3>
 
         <table class="table">
-            <thead><th>Time</th><th>Amount</th><th>BAC</th></thead>
+            <thead><th>Time</th><th>Amount</th><th>BAC</th><th>Actions</th></thead>
             <tbody id="drinks">
             </tbody>
         </table>
@@ -85,8 +85,75 @@
                 const amount = `${drink.name} (${drink.alcohol.toFixed(1)} g)`;
                 // `bac` array has an initial element at index 0 representing baseline, so per-drink bac is at i+1
                 const bacVal = (dude.bac[i+1] && dude.bac[i+1].bac) ? dude.bac[i+1].bac.toFixed(3) : '';
-                $("#drinks").append(`<tr><td>${time}</td><td>${amount}</td><td>${bacVal}</td></tr>`);
+                $("#drinks").append(`<tr data-index="${i}"><td>${time}</td><td>${amount}</td><td>${bacVal}</td><td><button class="btn btn-sm btn-secondary edit" data-index="${i}">Edit</button> <button class="btn btn-sm btn-danger remove" data-index="${i}">Remove</button></td></tr>`);
             }
+
+            // attach handlers for edit/remove
+            $(".remove").click(function(){
+                const i = Number($(this).attr('data-index'));
+                if (!isNaN(i)) {
+                    dude.drinks.splice(i, 1);
+                    dude.recompute_bac();
+                    do_table();
+                    $("#bac-label").text(dude.get_bac());
+                }
+            });
+
+            $(".edit").click(function(){
+                const i = Number($(this).attr('data-index'));
+                if (!isNaN(i)) {
+                    show_edit_row(i);
+                }
+            });
+        }
+
+        function toDatetimeLocal(ms) {
+            const d = new Date(Number(ms));
+            const pad = n => n.toString().padStart(2, '0');
+            const yyyy = d.getFullYear();
+            const mm = pad(d.getMonth()+1);
+            const dd = pad(d.getDate());
+            const hh = pad(d.getHours());
+            const min = pad(d.getMinutes());
+            return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+        }
+
+        function show_edit_row(i) {
+            const drink = dude.drinks[i];
+            const timeVal = toDatetimeLocal(drink.time);
+            const alcoholVal = drink.alcohol.toFixed(2);
+            const nameVal = drink.name;
+            const $row = $(`#drinks tr[data-index='${i}']`);
+            $row.html(`
+                <td><input class="form-control form-control-sm" type="datetime-local" id="time-${i}" value="${timeVal}"></td>
+                <td>
+                    <div class="mb-1"><input class="form-control form-control-sm" id="alcohol-${i}" type="number" step="0.1" value="${alcoholVal}"></div>
+                    <div><input class="form-control form-control-sm" id="name-${i}" type="text" value="${nameVal}"></div>
+                </td>
+                <td></td>
+                <td>
+                    <button class="btn btn-sm btn-primary save" data-index="${i}">Save</button>
+                    <button class="btn btn-sm btn-light cancel" data-index="${i}">Cancel</button>
+                </td>
+            `);
+
+            $row.find('.cancel').click(()=>{ do_table(); });
+            $row.find('.save').click(()=>{ save_edit_row(i); });
+        }
+
+        function save_edit_row(i) {
+            const t = $(`#time-${i}`).val();
+            const a = Number($(`#alcohol-${i}`).val()) || 0;
+            const n = $(`#name-${i}`).val() || '';
+            const ts = new Date(t).getTime();
+            if (!isNaN(ts)) {
+                dude.drinks[i].time = ts;
+            }
+            dude.drinks[i].alcohol = a;
+            dude.drinks[i].name = n;
+            dude.recompute_bac();
+            do_table();
+            $("#bac-label").text(dude.get_bac());
         }
     </script>
 </body>
