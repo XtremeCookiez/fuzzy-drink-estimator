@@ -31,6 +31,14 @@
                     <option value="female">Female</option>
                 </select>
             </div>
+            <div class="mb-3">
+                <label for="" class="form-label">Drink size (oz)</label>
+                <input type="number" class="form-control" name="size" id="size" aria-describedby="helpId" placeholder="" step="0.1" value="1.5">
+            </div>
+            <div class="mb-3">
+                <label for="" class="form-label">Alcohol % (ABV)</label>
+                <input type="number" class="form-control" name="abv" id="abv" aria-describedby="helpId" placeholder="" step="0.1" value="40">
+            </div>
             <button type="button" class="btn btn-success" id="add">Add Drink</button>
             <button id="calculate" type="button" class="btn btn-primary">Calculate</button>
         </form>
@@ -50,14 +58,20 @@
             console.log("doin shit")
             $("#add").click(()=>{
                 if (dude == null) {
-                    dude = new Drinker($("#weight").val(), $("#gender").val(), "drink");
+                    dude = new Drinker(Number($("#weight").val()), $("#gender").val(), "drink");
                 }
-                dude.add_drink(14, Date.now());
+                // compute grams of alcohol from size (oz) and ABV (%)
+                let sizeOz = Number($("#size").val()) || 1.5;
+                let abv = Number($("#abv").val()) || 40;
+                // oz -> mL: 1 fl oz = 29.5735 mL; ethanol density = 0.789 g/mL
+                let grams = sizeOz * 29.5735 * (abv/100) * 0.789;
+                dude.add_drink_now(grams, `${sizeOz}oz @ ${abv}%`);
                 do_table();
+                $("#bac-label").text(dude.get_bac());
             });
             setInterval(()=>{
                 if (dude != null){
-                    $("#bac-label").text(dude.calculate_bac_at_time(Date.now()));
+                    $("#bac-label").text(dude.get_bac());
                 }
             }, 10000)
         };
@@ -66,7 +80,12 @@
         function do_table() {
             $("#drinks").html("");
             for (let i=0; i<dude.drinks.length; i++) {
-                $("#drinks").append(`<tr><td>${dude.drinks[i].time}</td><td>${dude.drinks[i].alcohol}</td><td></td></tr>`);
+                const drink = dude.drinks[i];
+                const time = new Date(drink.time).toLocaleString();
+                const amount = `${drink.name} (${drink.alcohol.toFixed(1)} g)`;
+                // `bac` array has an initial element at index 0 representing baseline, so per-drink bac is at i+1
+                const bacVal = (dude.bac[i+1] && dude.bac[i+1].bac) ? dude.bac[i+1].bac.toFixed(3) : '';
+                $("#drinks").append(`<tr><td>${time}</td><td>${amount}</td><td>${bacVal}</td></tr>`);
             }
         }
     </script>
