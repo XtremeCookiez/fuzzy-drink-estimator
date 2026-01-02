@@ -76,6 +76,13 @@ class Drinker {
         return Math.max(this.last_bac - processed, 0)
     }
 
+    sober_time() {
+        let current_bac = this.get_bac();
+        let hours_til = Math.max(current_bac - 0.05, 0) / 0.015;
+        let sober_timestamp = Date.now() + hours_til * 3600000;
+        return sober_timestamp;
+    }
+
     recompute_bac() {
         // Rebuild the bac timeline from current drinks (sorted by time)
         this.drinks.sort((a,b)=>a.time - b.time);

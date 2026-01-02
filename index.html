@@ -44,6 +44,8 @@
         </form>
 
         <h3>Current BAC: <span id="bac-label">N/A</span></h3>
+        <h3>Sober(ish) Time: <span id="sober-label">N/A</span></h3>
+        <p style="font-style: italic;">(Sober time is when your BAC drops to 0.05 or below)</p>
 
         <table class="table">
             <thead><th>Time</th><th>Amount</th><th>BAC</th><th>Actions</th></thead>
@@ -54,8 +56,23 @@
     </div>
     <script type="text/javascript" >
         var dude = null;
+        function DisplayBAC() {
+            if (dude != null){
+                $("#bac-label").text(dude.get_bac().toFixed(4));
+                if (dude.get_bac() > .08) {
+                    $("#bac-label").css("color", "red");
+                } else {
+                    $("#bac-label").css("color", "black");
+                }
+                let soberTs = dude.sober_time();
+                $("#sober-label").text(new Date(soberTs).toLocaleString());
+            }
+        }
         window.onload = ()=>{
             console.log("doin shit")
+            load_session();
+            // prune old drinks on load
+            prune_old_drinks();
             $("#add").click(()=>{
                 if (dude == null) {
                     dude = new Drinker(Number($("#weight").val()), $("#gender").val(), "drink");
@@ -66,13 +83,14 @@
                 // oz -> mL: 1 fl oz = 29.5735 mL; ethanol density = 0.789 g/mL
                 let grams = sizeOz * 29.5735 * (abv/100) * 0.789;
                 dude.add_drink_now(grams, `${sizeOz}oz @ ${abv}%`);
+                // remove any drinks older than 24 hours, then save session
+                prune_old_drinks();
                 do_table();
-                $("#bac-label").text(dude.get_bac());
+                DisplayBAC();
+                save_session();
             });
             setInterval(()=>{
-                if (dude != null){
-                    $("#bac-label").text(dude.get_bac());
-                }
+                DisplayBAC();
             }, 10000)
         };
 
@@ -96,6 +114,7 @@
                     dude.recompute_bac();
                     do_table();
                     $("#bac-label").text(dude.get_bac());
+                    save_session();
                 }
             });
 
@@ -154,6 +173,67 @@
             dude.recompute_bac();
             do_table();
             $("#bac-label").text(dude.get_bac());
+            save_session();
+        }
+
+        // Session cookie helpers - store weight, gender, and drinks array in a session cookie
+        function save_session() {
+            if (dude == null) return;
+            const payload = {
+                weight: dude.weight,
+                gender: (dude.r == 0.68) ? 'male' : 'female',
+                drinks: dude.drinks.map(d => ({alcohol: d.alcohol, time: d.time, name: d.name}))
+            };
+            const val = encodeURIComponent(JSON.stringify(payload));
+            document.cookie = `fuzzy_drink_meter=${val}; path=/`;
+        }
+
+        function get_cookie(name) {
+            const cookies = document.cookie.split(';').map(c => c.trim());
+            for (const c of cookies) {
+                if (c.startsWith(name + '=')) {
+                    return c.substring((name + '=').length);
+                }
+            }
+            return null;
+        }
+
+        function load_session() {
+            const raw = get_cookie('fuzzy_drink_meter');
+            if (!raw) return;
+            try {
+                const data = JSON.parse(decodeURIComponent(raw));
+                if (!data) return;
+                const w = Number(data.weight) || Number($("#weight").val()) || 0;
+                const g = data.gender || $("#gender").val() || 'male';
+                dude = new Drinker(w, g);
+                if (Array.isArray(data.drinks)) {
+                    for (const d of data.drinks) {
+                        // ensure time is a number
+                        const t = Number(d.time) || Date.now();
+                        dude.add_drink(Number(d.alcohol) || 0, t, d.name || 'drink');
+                    }
+                }
+                dude.recompute_bac();
+                do_table();
+                DisplayBAC();
+            } catch (e) {
+                console.error('failed to load session cookie', e);
+            }
+        }
+
+        // remove drinks older than 24 hours (86400000 ms)
+        function prune_old_drinks() {
+            if (dude == null) return;
+            const cutoff = Date.now() - 24 * 3600000;
+            const before = dude.drinks.length;
+            dude.drinks = dude.drinks.filter(d => (Number(d.time) >= cutoff));
+            if (dude.drinks.length !== before) {
+                dude.recompute_bac();
+                do_table();
+                DisplayBAC();
+                save_session();
+            }
         }
     </script>
 </body>
